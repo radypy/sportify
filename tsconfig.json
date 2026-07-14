@@ -8,8 +8,8 @@
     "strictNullChecks": true,
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./app/*"]
+      "~/*": ["./src/*"]
     }
   },
-  "include": ["app/**/*.ts", "app/**/*.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

@@ -1,7 +1,13 @@
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
-import tsConfigPaths from 'vite-tsconfig-paths'
+import { resolve } from 'path'
 
 export default defineConfig({
-  plugins: [tsConfigPaths(), tanstackStart()],
+  plugins: [tanstackStart(), react()],
+  resolve: {
+    alias: {
+      '~': resolve(import.meta.dirname, './src'),
+    },
+  },
 })
