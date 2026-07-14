@@ -2,7 +2,6 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
 import { getSupabase } from '~/lib/supabase'
 
 export const Route = createFileRoute('/_authenticated')({
-  ssr: false,
   beforeLoad: async () => {
     const {
       data: { session },

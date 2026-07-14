@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { getSupabase } from '~/lib/supabase'
 
 export const Route = createFileRoute('/auth')({
-  ssr: false,
   component: AuthPage,
 })
 

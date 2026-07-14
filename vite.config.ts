@@ -1,13 +1,11 @@
-import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [
-    tanstackStart({
-      target: 'vercel',
-    }),
+    TanStackRouterVite(),
     react(),
   ],
   resolve: {
