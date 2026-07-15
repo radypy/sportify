@@ -245,9 +245,18 @@ function GameDetailsPage() {
                 <p className="truncate text-sm font-medium text-foreground">
                   {p.name ?? 'Player'}
                 </p>
-                {p.id === game.creator_id && (
-                  <p className="text-xs text-primary">Host</p>
-                )}
+                <p className="truncate text-xs">
+                  {p.skill_level ? (
+                    <span className="text-secondary">
+                      {SKILL_LABEL[p.skill_level]}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">No level set</span>
+                  )}
+                  {p.id === game.creator_id && (
+                    <span className="text-primary"> · Host</span>
+                  )}
+                </p>
               </div>
             </Link>
           ))}
