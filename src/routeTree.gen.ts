@@ -17,6 +17,7 @@ import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedFindRouteImport } from './routes/_authenticated/find'
 import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated/create'
 import { Route as AuthenticatedUsersIdRouteImport } from './routes/_authenticated/users.$id'
+import { Route as AuthenticatedMessagesGameIdRouteImport } from './routes/_authenticated/messages.$gameId'
 import { Route as AuthenticatedGamesIdRouteImport } from './routes/_authenticated/games.$id'
 
 const AuthRoute = AuthRouteImport.update({
@@ -58,6 +59,12 @@ const AuthenticatedUsersIdRoute = AuthenticatedUsersIdRouteImport.update({
   path: '/users/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedMessagesGameIdRoute =
+  AuthenticatedMessagesGameIdRouteImport.update({
+    id: '/$gameId',
+    path: '/$gameId',
+    getParentRoute: () => AuthenticatedMessagesRoute,
+  } as any)
 const AuthenticatedGamesIdRoute = AuthenticatedGamesIdRouteImport.update({
   id: '/games/$id',
   path: '/games/$id',
@@ -69,19 +76,21 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/create': typeof AuthenticatedCreateRoute
   '/find': typeof AuthenticatedFindRoute
-  '/messages': typeof AuthenticatedMessagesRoute
+  '/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/profile': typeof AuthenticatedProfileRoute
   '/games/$id': typeof AuthenticatedGamesIdRoute
+  '/messages/$gameId': typeof AuthenticatedMessagesGameIdRoute
   '/users/$id': typeof AuthenticatedUsersIdRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/create': typeof AuthenticatedCreateRoute
   '/find': typeof AuthenticatedFindRoute
-  '/messages': typeof AuthenticatedMessagesRoute
+  '/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/profile': typeof AuthenticatedProfileRoute
   '/': typeof AuthenticatedIndexRoute
   '/games/$id': typeof AuthenticatedGamesIdRoute
+  '/messages/$gameId': typeof AuthenticatedMessagesGameIdRoute
   '/users/$id': typeof AuthenticatedUsersIdRoute
 }
 export interface FileRoutesById {
@@ -90,10 +99,11 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/create': typeof AuthenticatedCreateRoute
   '/_authenticated/find': typeof AuthenticatedFindRoute
-  '/_authenticated/messages': typeof AuthenticatedMessagesRoute
+  '/_authenticated/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/games/$id': typeof AuthenticatedGamesIdRoute
+  '/_authenticated/messages/$gameId': typeof AuthenticatedMessagesGameIdRoute
   '/_authenticated/users/$id': typeof AuthenticatedUsersIdRoute
 }
 export interface FileRouteTypes {
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/profile'
     | '/games/$id'
+    | '/messages/$gameId'
     | '/users/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/'
     | '/games/$id'
+    | '/messages/$gameId'
     | '/users/$id'
   id:
     | '__root__'
@@ -127,6 +139,7 @@ export interface FileRouteTypes {
     | '/_authenticated/profile'
     | '/_authenticated/'
     | '/_authenticated/games/$id'
+    | '/_authenticated/messages/$gameId'
     | '/_authenticated/users/$id'
   fileRoutesById: FileRoutesById
 }
@@ -193,6 +206,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/messages/$gameId': {
+      id: '/_authenticated/messages/$gameId'
+      path: '/$gameId'
+      fullPath: '/messages/$gameId'
+      preLoaderRoute: typeof AuthenticatedMessagesGameIdRouteImport
+      parentRoute: typeof AuthenticatedMessagesRoute
+    }
     '/_authenticated/games/$id': {
       id: '/_authenticated/games/$id'
       path: '/games/$id'
@@ -203,10 +223,23 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedMessagesRouteChildren {
+  AuthenticatedMessagesGameIdRoute: typeof AuthenticatedMessagesGameIdRoute
+}
+
+const AuthenticatedMessagesRouteChildren: AuthenticatedMessagesRouteChildren = {
+  AuthenticatedMessagesGameIdRoute: AuthenticatedMessagesGameIdRoute,
+}
+
+const AuthenticatedMessagesRouteWithChildren =
+  AuthenticatedMessagesRoute._addFileChildren(
+    AuthenticatedMessagesRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedCreateRoute: typeof AuthenticatedCreateRoute
   AuthenticatedFindRoute: typeof AuthenticatedFindRoute
-  AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRoute
+  AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRouteWithChildren
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedGamesIdRoute: typeof AuthenticatedGamesIdRoute
@@ -216,7 +249,7 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedCreateRoute: AuthenticatedCreateRoute,
   AuthenticatedFindRoute: AuthenticatedFindRoute,
-  AuthenticatedMessagesRoute: AuthenticatedMessagesRoute,
+  AuthenticatedMessagesRoute: AuthenticatedMessagesRouteWithChildren,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedGamesIdRoute: AuthenticatedGamesIdRoute,
