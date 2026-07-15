@@ -17,8 +17,8 @@ import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedFindRouteImport } from './routes/_authenticated/find'
 import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated/create'
 import { Route as AuthenticatedUsersIdRouteImport } from './routes/_authenticated/users.$id'
-import { Route as AuthenticatedMessagesGameIdRouteImport } from './routes/_authenticated/messages.$gameId'
 import { Route as AuthenticatedGamesIdRouteImport } from './routes/_authenticated/games.$id'
+import { Route as AuthenticatedChatGameIdRouteImport } from './routes/_authenticated/chat.$gameId'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -59,15 +59,14 @@ const AuthenticatedUsersIdRoute = AuthenticatedUsersIdRouteImport.update({
   path: '/users/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedMessagesGameIdRoute =
-  AuthenticatedMessagesGameIdRouteImport.update({
-    id: '/$gameId',
-    path: '/$gameId',
-    getParentRoute: () => AuthenticatedMessagesRoute,
-  } as any)
 const AuthenticatedGamesIdRoute = AuthenticatedGamesIdRouteImport.update({
   id: '/games/$id',
   path: '/games/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedChatGameIdRoute = AuthenticatedChatGameIdRouteImport.update({
+  id: '/chat/$gameId',
+  path: '/chat/$gameId',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 
@@ -76,21 +75,21 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/create': typeof AuthenticatedCreateRoute
   '/find': typeof AuthenticatedFindRoute
-  '/messages': typeof AuthenticatedMessagesRouteWithChildren
+  '/messages': typeof AuthenticatedMessagesRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/chat/$gameId': typeof AuthenticatedChatGameIdRoute
   '/games/$id': typeof AuthenticatedGamesIdRoute
-  '/messages/$gameId': typeof AuthenticatedMessagesGameIdRoute
   '/users/$id': typeof AuthenticatedUsersIdRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/create': typeof AuthenticatedCreateRoute
   '/find': typeof AuthenticatedFindRoute
-  '/messages': typeof AuthenticatedMessagesRouteWithChildren
+  '/messages': typeof AuthenticatedMessagesRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/': typeof AuthenticatedIndexRoute
+  '/chat/$gameId': typeof AuthenticatedChatGameIdRoute
   '/games/$id': typeof AuthenticatedGamesIdRoute
-  '/messages/$gameId': typeof AuthenticatedMessagesGameIdRoute
   '/users/$id': typeof AuthenticatedUsersIdRoute
 }
 export interface FileRoutesById {
@@ -99,11 +98,11 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/create': typeof AuthenticatedCreateRoute
   '/_authenticated/find': typeof AuthenticatedFindRoute
-  '/_authenticated/messages': typeof AuthenticatedMessagesRouteWithChildren
+  '/_authenticated/messages': typeof AuthenticatedMessagesRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/chat/$gameId': typeof AuthenticatedChatGameIdRoute
   '/_authenticated/games/$id': typeof AuthenticatedGamesIdRoute
-  '/_authenticated/messages/$gameId': typeof AuthenticatedMessagesGameIdRoute
   '/_authenticated/users/$id': typeof AuthenticatedUsersIdRoute
 }
 export interface FileRouteTypes {
@@ -115,8 +114,8 @@ export interface FileRouteTypes {
     | '/find'
     | '/messages'
     | '/profile'
+    | '/chat/$gameId'
     | '/games/$id'
-    | '/messages/$gameId'
     | '/users/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -126,8 +125,8 @@ export interface FileRouteTypes {
     | '/messages'
     | '/profile'
     | '/'
+    | '/chat/$gameId'
     | '/games/$id'
-    | '/messages/$gameId'
     | '/users/$id'
   id:
     | '__root__'
@@ -138,8 +137,8 @@ export interface FileRouteTypes {
     | '/_authenticated/messages'
     | '/_authenticated/profile'
     | '/_authenticated/'
+    | '/_authenticated/chat/$gameId'
     | '/_authenticated/games/$id'
-    | '/_authenticated/messages/$gameId'
     | '/_authenticated/users/$id'
   fileRoutesById: FileRoutesById
 }
@@ -206,13 +205,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/messages/$gameId': {
-      id: '/_authenticated/messages/$gameId'
-      path: '/$gameId'
-      fullPath: '/messages/$gameId'
-      preLoaderRoute: typeof AuthenticatedMessagesGameIdRouteImport
-      parentRoute: typeof AuthenticatedMessagesRoute
-    }
     '/_authenticated/games/$id': {
       id: '/_authenticated/games/$id'
       path: '/games/$id'
@@ -220,28 +212,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedGamesIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/chat/$gameId': {
+      id: '/_authenticated/chat/$gameId'
+      path: '/chat/$gameId'
+      fullPath: '/chat/$gameId'
+      preLoaderRoute: typeof AuthenticatedChatGameIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
-
-interface AuthenticatedMessagesRouteChildren {
-  AuthenticatedMessagesGameIdRoute: typeof AuthenticatedMessagesGameIdRoute
-}
-
-const AuthenticatedMessagesRouteChildren: AuthenticatedMessagesRouteChildren = {
-  AuthenticatedMessagesGameIdRoute: AuthenticatedMessagesGameIdRoute,
-}
-
-const AuthenticatedMessagesRouteWithChildren =
-  AuthenticatedMessagesRoute._addFileChildren(
-    AuthenticatedMessagesRouteChildren,
-  )
 
 interface AuthenticatedRouteChildren {
   AuthenticatedCreateRoute: typeof AuthenticatedCreateRoute
   AuthenticatedFindRoute: typeof AuthenticatedFindRoute
-  AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRouteWithChildren
+  AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedChatGameIdRoute: typeof AuthenticatedChatGameIdRoute
   AuthenticatedGamesIdRoute: typeof AuthenticatedGamesIdRoute
   AuthenticatedUsersIdRoute: typeof AuthenticatedUsersIdRoute
 }
@@ -249,9 +236,10 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedCreateRoute: AuthenticatedCreateRoute,
   AuthenticatedFindRoute: AuthenticatedFindRoute,
-  AuthenticatedMessagesRoute: AuthenticatedMessagesRouteWithChildren,
+  AuthenticatedMessagesRoute: AuthenticatedMessagesRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedChatGameIdRoute: AuthenticatedChatGameIdRoute,
   AuthenticatedGamesIdRoute: AuthenticatedGamesIdRoute,
   AuthenticatedUsersIdRoute: AuthenticatedUsersIdRoute,
 }

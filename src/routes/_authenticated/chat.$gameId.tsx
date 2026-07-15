@@ -4,7 +4,7 @@ import { getSupabase } from '~/lib/supabase'
 import { SPORT_EMOJI } from '~/lib/sports'
 import type { Game, Message, Profile } from '~/lib/types'
 
-export const Route = createFileRoute('/_authenticated/messages/$gameId')({
+export const Route = createFileRoute('/_authenticated/chat/$gameId')({
   component: ChatPage,
 })
 
