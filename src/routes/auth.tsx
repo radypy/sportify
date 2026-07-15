@@ -13,6 +13,7 @@ function AuthPage() {
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [confirmationSent, setConfirmationSent] = useState(false)
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,7 +23,7 @@ function AuthPage() {
 
     try {
       if (mode === 'signup') {
-        const { error } = await getSupabase().auth.signUp({
+        const { data, error } = await getSupabase().auth.signUp({
           email,
           password,
           options: {
@@ -30,6 +31,20 @@ function AuthPage() {
           },
         })
         if (error) throw error
+
+        // If the email is already registered, Supabase returns a user with
+        // no identities (to avoid leaking which emails exist).
+        if (data.user && data.user.identities?.length === 0) {
+          throw new Error('An account with this email already exists.')
+        }
+
+        // When email confirmation is enabled, no session is created until the
+        // user clicks the link. Show a "check your email" confirmation instead
+        // of redirecting.
+        if (!data.session) {
+          setConfirmationSent(true)
+          return
+        }
       } else {
         const { error } = await getSupabase().auth.signInWithPassword({
           email,
@@ -54,6 +69,40 @@ function AuthPage() {
       },
     })
     if (error) setError(error.message)
+  }
+
+  if (confirmationSent) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center px-4">
+        <div className="mx-auto w-full max-w-md text-center">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-4xl">
+            📩
+          </div>
+          <h1 className="text-gradient font-display text-3xl font-bold tracking-tight">
+            Check your email
+          </h1>
+          <p className="mt-3 text-muted-foreground">
+            We&apos;ve sent a confirmation link to{' '}
+            <span className="font-medium text-foreground">{email}</span>. Click
+            the link in that email to activate your account.
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Didn&apos;t get it? Check your spam folder.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmationSent(false)
+              setMode('signin')
+              setError(null)
+            }}
+            className="mt-8 font-medium text-primary hover:underline"
+          >
+            Back to sign in
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
