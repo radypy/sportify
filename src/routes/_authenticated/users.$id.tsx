@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { getSupabase } from '~/lib/supabase'
-import { SPORT_EMOJI, SPORT_LABEL, SKILL_LABEL } from '~/lib/sports'
-import type { Profile } from '~/lib/types'
+import { SPORT_EMOJI, SPORT_LABEL, PLAYER_LEVEL_LABEL } from '~/lib/sports'
+import type { Profile, ProfileSport } from '~/lib/types'
 
 export const Route = createFileRoute('/_authenticated/users/$id')({
   component: UserProfilePage,
@@ -11,18 +11,19 @@ export const Route = createFileRoute('/_authenticated/users/$id')({
 function UserProfilePage() {
   const { id } = Route.useParams()
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [profileSports, setProfileSports] = useState<ProfileSport[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getSupabase()
-      .from('profiles')
-      .select('*')
-      .eq('id', id)
-      .single()
-      .then(({ data }) => {
-        if (data) setProfile(data as Profile)
-        setLoading(false)
-      })
+    const supabase = getSupabase()
+    Promise.all([
+      supabase.from('profiles').select('*').eq('id', id).single(),
+      supabase.from('profile_sports').select('*').eq('profile_id', id),
+    ]).then(([{ data: profileData }, { data: sportsData }]) => {
+      if (profileData) setProfile(profileData as Profile)
+      setProfileSports((sportsData as ProfileSport[]) ?? [])
+      setLoading(false)
+    })
   }, [id])
 
   if (loading) {
@@ -67,7 +68,7 @@ function UserProfilePage() {
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-3 gap-3">
+      <div className="mb-6 grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-border bg-surface p-3 text-center">
           <p className="font-display text-xl font-bold text-primary">
             {profile.games_played}
@@ -80,56 +81,56 @@ function UserProfilePage() {
           </p>
           <p className="text-xs text-muted-foreground">Rating</p>
         </div>
-        <div className="rounded-xl border border-border bg-surface p-3 text-center">
-          <p className="font-display text-xl font-bold text-foreground">
-            {profile.skill_level
-              ? SKILL_LABEL[
-                  profile.skill_level as keyof typeof SKILL_LABEL
-                ]?.split('-')[0]
-              : '-'}
-          </p>
-          <p className="text-xs text-muted-foreground">Level</p>
-        </div>
       </div>
 
       {/* Info */}
       <div className="space-y-4">
-        {profile.position && (
-          <div>
-            <h3 className="mb-1 text-sm font-medium text-muted-foreground">
-              Position
-            </h3>
-            <p className="text-foreground">{profile.position}</p>
-          </div>
-        )}
-
-        {profile.bio && (
-          <div>
-            <h3 className="mb-1 text-sm font-medium text-muted-foreground">
-              Bio
-            </h3>
+        <div>
+          <h3 className="mb-1 text-sm font-medium text-muted-foreground">
+            Bio
+          </h3>
+          {profile.bio ? (
             <p className="text-foreground">{profile.bio}</p>
-          </div>
-        )}
+          ) : (
+            <p className="text-sm text-muted-foreground">No bio yet.</p>
+          )}
+        </div>
 
-        {profile.favorite_sports && profile.favorite_sports.length > 0 && (
-          <div>
-            <h3 className="mb-2 text-sm font-medium text-muted-foreground">
-              Favorite Sports
-            </h3>
+        <div>
+          <h3 className="mb-2 text-sm font-medium text-muted-foreground">
+            Favorite Sports
+          </h3>
+          {profileSports.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {profile.favorite_sports.map((s) => (
-                <span
-                  key={s}
-                  className="rounded-full border border-border bg-surface px-3 py-1 text-sm text-foreground"
-                >
-                  {SPORT_EMOJI[s as keyof typeof SPORT_EMOJI]}{' '}
-                  {SPORT_LABEL[s as keyof typeof SPORT_LABEL]}
-                </span>
+              {profileSports.map((ps) => (
+                <div key={ps.sport} className="group relative">
+                  <span className="cursor-default rounded-full border border-border bg-surface px-3 py-1 text-sm text-foreground transition-colors group-hover:border-primary/50">
+                    {SPORT_EMOJI[ps.sport as keyof typeof SPORT_EMOJI]}{' '}
+                    {SPORT_LABEL[ps.sport as keyof typeof SPORT_LABEL]}
+                  </span>
+                  <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-max max-w-[200px] -translate-x-1/2 rounded-lg border border-border bg-surface px-3 py-2 text-xs opacity-0 shadow-glow transition-opacity group-hover:opacity-100">
+                    <p className="text-muted-foreground">
+                      Level:{' '}
+                      <span className="text-foreground">
+                        {PLAYER_LEVEL_LABEL[ps.player_level]}
+                      </span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      Position:{' '}
+                      <span className="text-foreground">
+                        {ps.player_position || 'Not specified'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No favorite sports yet.
+            </p>
+          )}
+        </div>
 
         {profile.preferred_times && (
           <div>

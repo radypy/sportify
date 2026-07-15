@@ -7,10 +7,7 @@ create table public.profiles (
   avatar_url text,
   age integer check (age > 0 and age < 150),
   city text,
-  position text,
   preferred_times text,
-  skill_level text check (skill_level in ('beginner','semi-intermediate','intermediate','semi-advanced','advanced')),
-  favorite_sports text[] default '{}',
   bio text,
   games_played integer default 0,
   rating numeric(3,2),
@@ -49,6 +46,24 @@ create table public.game_participants (
   unique(game_id, user_id)
 );
 
+-- Per-sport profile details (player level & position)
+create table public.profile_sports (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references public.profiles(id) on delete cascade not null,
+  sport text not null check (sport in (
+    'football','basketball','volleyball','tennis','table_tennis',
+    'padel','squash','chess','board_games','esports',
+    'paintball','martial_arts','running','other'
+  )),
+  player_level text not null default 'beginner' check (player_level in (
+    'beginner','novice','intermediate','advanced','semi-pro','professional'
+  )),
+  player_position text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(profile_id, sport)
+);
+
 -- Indexes
 create index idx_games_sport on public.games(sport);
 create index idx_games_date_time on public.games(date_time);
@@ -56,6 +71,7 @@ create index idx_games_status on public.games(status);
 create index idx_games_city on public.games(city);
 create index idx_game_participants_game on public.game_participants(game_id);
 create index idx_game_participants_user on public.game_participants(user_id);
+create index idx_profile_sports_profile on public.profile_sports(profile_id);
 
 -- ============================================================
 -- Triggers
@@ -123,7 +139,7 @@ create trigger on_participant_change
   after insert or delete on public.game_participants
   for each row execute function public.update_player_count();
 
--- 4. Auto-update updated_at on profiles
+-- 4. Auto-update updated_at on profiles / profile_sports
 create or replace function public.update_updated_at()
 returns trigger as $$
 begin
@@ -136,6 +152,10 @@ create trigger on_profile_update
   before update on public.profiles
   for each row execute function public.update_updated_at();
 
+create trigger on_profile_sport_update
+  before update on public.profile_sports
+  for each row execute function public.update_updated_at();
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
@@ -143,6 +163,7 @@ create trigger on_profile_update
 alter table public.profiles enable row level security;
 alter table public.games enable row level security;
 alter table public.game_participants enable row level security;
+alter table public.profile_sports enable row level security;
 
 -- Profiles: anyone authenticated can read, users can update own
 create policy "Profiles are viewable by authenticated users"
@@ -191,3 +212,24 @@ create policy "Users can leave games"
   on public.game_participants for delete
   to authenticated
   using (auth.uid() = user_id);
+
+-- Profile sports: authenticated can read, users manage own
+create policy "Profile sports are viewable by authenticated users"
+  on public.profile_sports for select
+  to authenticated
+  using (true);
+
+create policy "Users can add own sports"
+  on public.profile_sports for insert
+  to authenticated
+  with check (auth.uid() = profile_id);
+
+create policy "Users can update own sports"
+  on public.profile_sports for update
+  to authenticated
+  using (auth.uid() = profile_id);
+
+create policy "Users can delete own sports"
+  on public.profile_sports for delete
+  to authenticated
+  using (auth.uid() = profile_id);

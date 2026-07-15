@@ -12,6 +12,7 @@ function HomePage() {
   const [upcomingGames, setUpcomingGames] = useState<Game[]>([])
   const [recommendedGames, setRecommendedGames] = useState<Game[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [hasFavoriteSports, setHasFavoriteSports] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -53,10 +54,16 @@ function HomePage() {
     }
 
     // Load recommended games (based on favorite sports, or all open)
+    const { data: sportsData } = await supabase
+      .from('profile_sports')
+      .select('sport')
+      .eq('profile_id', user.id)
+
     const favSports =
-      profileData?.favorite_sports && profileData.favorite_sports.length > 0
-        ? profileData.favorite_sports
+      sportsData && sportsData.length > 0
+        ? sportsData.map((s) => s.sport)
         : null
+    setHasFavoriteSports(!!favSports)
 
     let query = supabase
       .from('games')
@@ -122,9 +129,7 @@ function HomePage() {
       {/* Recommended */}
       <section>
         <h2 className="mb-3 font-display text-lg font-semibold text-foreground">
-          {profile?.favorite_sports && profile.favorite_sports.length > 0
-            ? 'Recommended for You'
-            : 'Available Games'}
+          {hasFavoriteSports ? 'Recommended for You' : 'Available Games'}
         </h2>
         {recommendedGames.length === 0 ? (
           <div className="rounded-xl border border-border bg-surface p-4 text-center text-sm text-muted-foreground">

@@ -1,4 +1,4 @@
-import type { Sport, SkillLevel } from './sports'
+import type { Sport, SkillLevel, PlayerLevel } from './sports'
 
 export interface Profile {
   id: string
@@ -6,13 +6,20 @@ export interface Profile {
   avatar_url: string | null
   age: number | null
   city: string | null
-  position: string | null
   preferred_times: string | null
-  skill_level: SkillLevel | null
-  favorite_sports: Sport[]
   bio: string | null
   games_played: number
   rating: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProfileSport {
+  id: string
+  profile_id: string
+  sport: Sport
+  player_level: PlayerLevel
+  player_position: string | null
   created_at: string
   updated_at: string
 }
@@ -66,6 +73,12 @@ export interface Database {
         Row: GameParticipant
         Insert: Omit<GameParticipant, 'id' | 'joined_at'>
         Update: Partial<GameParticipant>
+      }
+      profile_sports: {
+        Row: ProfileSport
+        Insert: Omit<ProfileSport, 'id' | 'created_at' | 'updated_at' | 'player_level' | 'player_position'> &
+          Partial<Pick<ProfileSport, 'player_level' | 'player_position'>>
+        Update: Partial<ProfileSport>
       }
     }
     Views: Record<string, never>

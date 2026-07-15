@@ -1,15 +1,20 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getSupabase } from '~/lib/supabase'
 import {
   SPORTS,
   SPORT_LABEL,
   SPORT_EMOJI,
-  SKILL_LEVELS,
-  SKILL_LABEL,
+  PLAYER_LEVELS,
+  PLAYER_LEVEL_LABEL,
 } from '~/lib/sports'
 import type { Profile } from '~/lib/types'
-import type { Sport, SkillLevel } from '~/lib/sports'
+import type { Sport, PlayerLevel } from '~/lib/sports'
+
+interface SportDetail {
+  playerLevel: PlayerLevel
+  playerPosition: string
+}
 
 export const Route = createFileRoute('/_authenticated/profile')({
   component: ProfilePage,
@@ -28,11 +33,13 @@ function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState('')
   const [age, setAge] = useState('')
   const [city, setCity] = useState('')
-  const [position, setPosition] = useState('')
   const [preferredTimes, setPreferredTimes] = useState('')
-  const [skillLevel, setSkillLevel] = useState<SkillLevel>('intermediate')
-  const [favoriteSports, setFavoriteSports] = useState<Sport[]>([])
+  const [sportDetails, setSportDetails] = useState<
+    Partial<Record<Sport, SportDetail>>
+  >({})
+  const [editingSport, setEditingSport] = useState<Sport | null>(null)
   const [bio, setBio] = useState('')
+  const initialSportsRef = useRef<Set<Sport>>(new Set())
 
   useEffect(() => {
     loadProfile()
@@ -58,19 +65,49 @@ function ProfilePage() {
       setAvatarUrl(p.avatar_url ?? '')
       setAge(p.age?.toString() ?? '')
       setCity(p.city ?? '')
-      setPosition(p.position ?? '')
       setPreferredTimes(p.preferred_times ?? '')
-      setSkillLevel((p.skill_level as SkillLevel) ?? 'intermediate')
-      setFavoriteSports((p.favorite_sports as Sport[]) ?? [])
       setBio(p.bio ?? '')
     }
+
+    const { data: sportsData } = await supabase
+      .from('profile_sports')
+      .select('*')
+      .eq('profile_id', user.id)
+
+    const details: Partial<Record<Sport, SportDetail>> = {}
+    for (const row of sportsData ?? []) {
+      details[row.sport as Sport] = {
+        playerLevel: row.player_level as PlayerLevel,
+        playerPosition: row.player_position ?? '',
+      }
+    }
+    setSportDetails(details)
+    initialSportsRef.current = new Set(Object.keys(details) as Sport[])
+
     setLoading(false)
   }
 
   const toggleSport = (sport: Sport) => {
-    setFavoriteSports((prev) =>
-      prev.includes(sport) ? prev.filter((s) => s !== sport) : [...prev, sport],
-    )
+    setSportDetails((prev) => {
+      if (prev[sport]) {
+        const next = { ...prev }
+        delete next[sport]
+        return next
+      }
+      return {
+        ...prev,
+        [sport]: { playerLevel: 'beginner' as PlayerLevel, playerPosition: '' },
+      }
+    })
+    setEditingSport(null)
+  }
+
+  const updateSportDetail = (sport: Sport, patch: Partial<SportDetail>) => {
+    setSportDetails((prev) => {
+      const current = prev[sport]
+      if (!current) return prev
+      return { ...prev, [sport]: { ...current, ...patch } }
+    })
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -92,15 +129,40 @@ function ProfilePage() {
           avatar_url: avatarUrl || null,
           age: age ? parseInt(age) : null,
           city: city || null,
-          position: position || null,
           preferred_times: preferredTimes || null,
-          skill_level: skillLevel,
-          favorite_sports: favoriteSports,
           bio: bio || null,
         })
         .eq('id', user.id)
 
       if (error) throw error
+
+      const selectedSports = Object.keys(sportDetails) as Sport[]
+      if (selectedSports.length > 0) {
+        const { error: sportsError } = await supabase.from('profile_sports').upsert(
+          selectedSports.map((sport) => ({
+            profile_id: user.id,
+            sport,
+            player_level: sportDetails[sport]!.playerLevel,
+            player_position: sportDetails[sport]!.playerPosition || null,
+          })),
+          { onConflict: 'profile_id,sport' },
+        )
+        if (sportsError) throw sportsError
+      }
+
+      const removedSports = Array.from(initialSportsRef.current).filter(
+        (s) => !sportDetails[s],
+      )
+      if (removedSports.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('profile_sports')
+          .delete()
+          .eq('profile_id', user.id)
+          .in('sport', removedSports)
+        if (deleteError) throw deleteError
+      }
+      initialSportsRef.current = new Set(selectedSports)
+
       setMessage({ type: 'success', text: 'Profile updated!' })
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message ?? 'Failed to save' })
@@ -221,20 +283,6 @@ function ProfilePage() {
           </div>
         </div>
 
-        {/* Position */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">
-            Position
-          </label>
-          <input
-            type="text"
-            value={position}
-            onChange={(e) => setPosition(e.target.value)}
-            placeholder="e.g. Goalkeeper, Point Guard"
-            className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-
         {/* Preferred Times */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-foreground">
@@ -249,29 +297,6 @@ function ProfilePage() {
           />
         </div>
 
-        {/* Skill Level */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">
-            Skill Level
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {SKILL_LEVELS.map((level) => (
-              <button
-                key={level}
-                type="button"
-                onClick={() => setSkillLevel(level)}
-                className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                  skillLevel === level
-                    ? 'border-secondary bg-secondary/10 text-secondary'
-                    : 'border-border text-muted-foreground hover:border-secondary/50'
-                }`}
-              >
-                {SKILL_LABEL[level]}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Favorite Sports */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-foreground">
@@ -284,7 +309,7 @@ function ProfilePage() {
                 type="button"
                 onClick={() => toggleSport(s)}
                 className={`flex flex-col items-center gap-1 rounded-xl border p-2 text-xs transition-colors ${
-                  favoriteSports.includes(s)
+                  sportDetails[s]
                     ? 'border-primary bg-primary/10 text-primary'
                     : 'border-border bg-surface text-muted-foreground hover:border-primary/50'
                 }`}
@@ -294,6 +319,103 @@ function ProfilePage() {
               </button>
             ))}
           </div>
+
+          {Object.keys(sportDetails).length > 0 && (
+            <div className="mt-3 space-y-2">
+              {SPORTS.filter((s) => sportDetails[s]).map((sport) => {
+                const detail = sportDetails[sport]!
+                const isEditing = editingSport === sport
+
+                return (
+                  <div
+                    key={sport}
+                    className="rounded-xl border border-border bg-surface p-3"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="flex items-center gap-2 font-medium text-foreground">
+                        <span className="text-lg">{SPORT_EMOJI[sport]}</span>
+                        {SPORT_LABEL[sport]}
+                      </span>
+                      {!isEditing && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingSport(sport)}
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">
+                            Player Level
+                          </label>
+                          <select
+                            value={detail.playerLevel}
+                            onChange={(e) =>
+                              updateSportDetail(sport, {
+                                playerLevel: e.target.value as PlayerLevel,
+                              })
+                            }
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            {PLAYER_LEVELS.map((level) => (
+                              <option key={level} value={level}>
+                                {PLAYER_LEVEL_LABEL[level]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">
+                            Player Position (optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={detail.playerPosition}
+                            onChange={(e) =>
+                              updateSportDetail(sport, {
+                                playerPosition: e.target.value,
+                              })
+                            }
+                            placeholder="e.g. Goalkeeper, Point Guard"
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEditingSport(null)}
+                          className="text-xs font-medium text-secondary hover:underline"
+                        >
+                          Done
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5 text-sm">
+                        <p className="text-muted-foreground">
+                          Level:{' '}
+                          <span className="text-foreground">
+                            {PLAYER_LEVEL_LABEL[detail.playerLevel]}
+                          </span>
+                        </p>
+                        {detail.playerPosition && (
+                          <p className="text-muted-foreground">
+                            Position:{' '}
+                            <span className="text-foreground">
+                              {detail.playerPosition}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Bio */}

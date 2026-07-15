@@ -68,3 +68,23 @@ export const SKILL_LABEL: Record<SkillLevel, string> = {
   'semi-advanced': 'Semi-Advanced',
   advanced: 'Advanced',
 }
+
+export const PLAYER_LEVELS = [
+  'beginner',
+  'novice',
+  'intermediate',
+  'advanced',
+  'semi-pro',
+  'professional',
+] as const
+
+export type PlayerLevel = (typeof PLAYER_LEVELS)[number]
+
+export const PLAYER_LEVEL_LABEL: Record<PlayerLevel, string> = {
+  beginner: 'Beginner',
+  novice: 'Novice',
+  intermediate: 'Intermediate',
+  advanced: 'Advanced',
+  'semi-pro': 'Semi-Pro',
+  professional: 'Professional',
+}
