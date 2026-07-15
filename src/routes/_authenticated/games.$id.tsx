@@ -2,8 +2,10 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { getSupabase } from '~/lib/supabase'
 import {
+  SPORTS,
   SPORT_EMOJI,
   SPORT_LABEL,
+  SKILL_LEVELS,
   SKILL_LABEL,
   PLAYER_LEVEL_LABEL,
   type PlayerLevel,
