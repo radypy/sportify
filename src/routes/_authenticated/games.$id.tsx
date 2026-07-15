@@ -1,7 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { getSupabase } from '~/lib/supabase'
-import { SPORT_EMOJI, SPORT_LABEL, SKILL_LABEL } from '~/lib/sports'
+import {
+  SPORT_EMOJI,
+  SPORT_LABEL,
+  SKILL_LABEL,
+  PLAYER_LEVEL_LABEL,
+  type PlayerLevel,
+} from '~/lib/sports'
 import type { Game, Profile } from '~/lib/types'
 
 export const Route = createFileRoute('/_authenticated/games/$id')({
@@ -13,6 +19,9 @@ function GameDetailsPage() {
   const [game, setGame] = useState<Game | null>(null)
   const [creator, setCreator] = useState<Profile | null>(null)
   const [participants, setParticipants] = useState<Profile[]>([])
+  const [sportLevels, setSportLevels] = useState<Record<string, PlayerLevel>>(
+    {},
+  )
   const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
@@ -56,6 +65,18 @@ function GameDetailsPage() {
           .select('*')
           .in('id', userIds)
         if (profiles) setParticipants(profiles as Profile[])
+
+        // Each participant's level for THIS game's sport
+        const { data: sportsData } = await supabase
+          .from('profile_sports')
+          .select('profile_id, player_level')
+          .eq('sport', gameData.sport)
+          .in('profile_id', userIds)
+        const levelMap: Record<string, PlayerLevel> = {}
+        sportsData?.forEach((s: any) => {
+          levelMap[s.profile_id] = s.player_level
+        })
+        setSportLevels(levelMap)
       }
     }
     setLoading(false)
@@ -246,9 +267,9 @@ function GameDetailsPage() {
                   {p.name ?? 'Player'}
                 </p>
                 <p className="truncate text-xs">
-                  {p.skill_level ? (
+                  {sportLevels[p.id] ? (
                     <span className="text-secondary">
-                      {SKILL_LABEL[p.skill_level]}
+                      {PLAYER_LEVEL_LABEL[sportLevels[p.id]]}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">No level set</span>
