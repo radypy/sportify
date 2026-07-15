@@ -10,6 +10,7 @@ import {
   PLAYER_LEVEL_LABEL,
   type PlayerLevel,
 } from '~/lib/sports'
+import { splitDateTime, combineDateTime, todayLocalDate } from '~/lib/datetime'
 import type { Game, Profile } from '~/lib/types'
 import type { Sport, SkillLevel } from '~/lib/sports'
 
@@ -360,13 +361,33 @@ function GameDetailsPage() {
             <label className="mb-1.5 block text-sm font-medium text-foreground">
               Date & Time
             </label>
-            <input
-              type="datetime-local"
-              value={editDateTime}
-              onChange={(e) => setEditDateTime(e.target.value)}
-              required
-              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={splitDateTime(editDateTime).date}
+                onChange={(e) =>
+                  setEditDateTime(
+                    combineDateTime(e.target.value, splitDateTime(editDateTime).time),
+                  )
+                }
+                required
+                className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <input
+                type="time"
+                value={splitDateTime(editDateTime).time}
+                onChange={(e) =>
+                  setEditDateTime(
+                    combineDateTime(
+                      splitDateTime(editDateTime).date || todayLocalDate(),
+                      e.target.value,
+                    ),
+                  )
+                }
+                required
+                className="w-32 shrink-0 rounded-xl border border-border bg-background px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
           </div>
 
           {/* Max Players */}

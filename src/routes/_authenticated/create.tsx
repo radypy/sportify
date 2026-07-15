@@ -8,6 +8,7 @@ import {
   SKILL_LEVELS,
   SKILL_LABEL,
 } from '~/lib/sports'
+import { splitDateTime, combineDateTime, todayLocalDate } from '~/lib/datetime'
 
 export const Route = createFileRoute('/_authenticated/create')({
   component: CreateGamePage,
@@ -153,19 +154,38 @@ function CreateGamePage() {
         {/* Date & Time */}
         <div>
           <label
-            htmlFor="datetime"
+            htmlFor="date"
             className="mb-1.5 block text-sm font-medium text-foreground"
           >
             Date & Time
           </label>
-          <input
-            id="datetime"
-            type="datetime-local"
-            value={dateTime}
-            onChange={(e) => setDateTime(e.target.value)}
-            required
-            className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              id="date"
+              type="date"
+              value={splitDateTime(dateTime).date}
+              onChange={(e) =>
+                setDateTime(combineDateTime(e.target.value, splitDateTime(dateTime).time))
+              }
+              required
+              className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <input
+              id="time"
+              type="time"
+              value={splitDateTime(dateTime).time}
+              onChange={(e) =>
+                setDateTime(
+                  combineDateTime(
+                    splitDateTime(dateTime).date || todayLocalDate(),
+                    e.target.value,
+                  ),
+                )
+              }
+              required
+              className="w-32 shrink-0 rounded-xl border border-border bg-surface px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
         </div>
 
         {/* Max Players */}

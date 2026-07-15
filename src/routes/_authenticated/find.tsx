@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { getSupabase } from '~/lib/supabase'
-import { SPORTS, SPORT_LABEL, SPORT_EMOJI, SKILL_LABEL } from '~/lib/sports'
+import { SPORTS, SPORT_LABEL, SPORT_EMOJI, SKILL_LEVELS, SKILL_LABEL } from '~/lib/sports'
+import { splitDateTime, combineDateTime, todayLocalDate } from '~/lib/datetime'
 import type { Game } from '~/lib/types'
-import type { Sport } from '~/lib/sports'
+import type { Sport, SkillLevel } from '~/lib/sports'
 
 export const Route = createFileRoute('/_authenticated/find')({
   component: FindGamesPage,
@@ -14,6 +15,11 @@ function FindGamesPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [sportFilter, setSportFilter] = useState<Sport | 'all'>('all')
+  const [levelFilter, setLevelFilter] = useState<SkillLevel | 'all'>('all')
+  const [cityFilter, setCityFilter] = useState('')
+  const [timeFrom, setTimeFrom] = useState('')
+  const [timeTo, setTimeTo] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
 
   useEffect(() => {
     loadGames()
@@ -38,8 +44,35 @@ function FindGamesPage() {
       g.title.toLowerCase().includes(search.toLowerCase()) ||
       g.location.toLowerCase().includes(search.toLowerCase())
     const matchesSport = sportFilter === 'all' || g.sport === sportFilter
-    return matchesSearch && matchesSport
+    const matchesLevel = levelFilter === 'all' || g.skill_level === levelFilter
+    const matchesCity =
+      !cityFilter || (g.city ?? '').toLowerCase().includes(cityFilter.toLowerCase())
+    const gameTime = new Date(g.date_time).getTime()
+    const matchesFrom = !timeFrom || gameTime >= new Date(timeFrom).getTime()
+    const matchesTo = !timeTo || gameTime <= new Date(timeTo).getTime()
+    return (
+      matchesSearch &&
+      matchesSport &&
+      matchesLevel &&
+      matchesCity &&
+      matchesFrom &&
+      matchesTo
+    )
   })
+
+  const activeFilterCount = [
+    levelFilter !== 'all',
+    cityFilter !== '',
+    timeFrom !== '',
+    timeTo !== '',
+  ].filter(Boolean).length
+
+  const clearFilters = () => {
+    setLevelFilter('all')
+    setCityFilter('')
+    setTimeFrom('')
+    setTimeTo('')
+  }
 
   const handleJoin = async (gameId: string) => {
     const supabase = getSupabase()
@@ -67,13 +100,154 @@ function FindGamesPage() {
       </h1>
 
       {/* Search */}
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search by title or location..."
-        className="mb-4 w-full rounded-xl border border-border bg-surface px-4 py-3 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-      />
+      <div className="mb-4 flex gap-2">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by title or location..."
+          className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <button
+          onClick={() => setShowFilters((v) => !v)}
+          className={`relative shrink-0 rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
+            showFilters || activeFilterCount > 0
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'border-border text-muted-foreground'
+          }`}
+        >
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-xs font-bold text-background">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {showFilters && (
+        <div className="mb-4 space-y-4 rounded-xl border border-border bg-surface p-4">
+          {/* City filter */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              City
+            </label>
+            <input
+              type="text"
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+              placeholder="Filter by city..."
+              className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          {/* Level filter */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Level
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setLevelFilter('all')}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                  levelFilter === 'all'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground'
+                }`}
+              >
+                All
+              </button>
+              {SKILL_LEVELS.map((level) => (
+                <button
+                  key={level}
+                  onClick={() => setLevelFilter(level)}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                    levelFilter === level
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  {SKILL_LABEL[level]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Time range filter */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Time range
+            </label>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-9 shrink-0 text-sm text-muted-foreground">
+                  From
+                </span>
+                <input
+                  type="date"
+                  value={splitDateTime(timeFrom).date}
+                  onChange={(e) =>
+                    setTimeFrom(
+                      combineDateTime(e.target.value, splitDateTime(timeFrom).time),
+                    )
+                  }
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <input
+                  type="time"
+                  value={splitDateTime(timeFrom).time}
+                  onChange={(e) =>
+                    setTimeFrom(
+                      combineDateTime(
+                        splitDateTime(timeFrom).date || todayLocalDate(),
+                        e.target.value,
+                      ),
+                    )
+                  }
+                  className="w-28 shrink-0 rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-9 shrink-0 text-sm text-muted-foreground">
+                  To
+                </span>
+                <input
+                  type="date"
+                  value={splitDateTime(timeTo).date}
+                  onChange={(e) =>
+                    setTimeTo(
+                      combineDateTime(e.target.value, splitDateTime(timeTo).time),
+                    )
+                  }
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <input
+                  type="time"
+                  value={splitDateTime(timeTo).time}
+                  onChange={(e) =>
+                    setTimeTo(
+                      combineDateTime(
+                        splitDateTime(timeTo).date || todayLocalDate(),
+                        e.target.value,
+                      ),
+                    )
+                  }
+                  className="w-28 shrink-0 rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+          </div>
+
+          {activeFilterCount > 0 && (
+            <button
+              onClick={clearFilters}
+              className="text-sm font-semibold text-primary hover:underline"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Sport filter */}
       <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
