@@ -40,6 +40,9 @@ function ProfilePage() {
   const [editingSport, setEditingSport] = useState<Sport | null>(null)
   const [bio, setBio] = useState('')
   const initialSportsRef = useRef<Set<Sport>>(new Set())
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     loadProfile()
@@ -174,6 +177,22 @@ function ProfilePage() {
   const handleSignOut = async () => {
     await getSupabase().auth.signOut()
     window.location.href = '/auth'
+  }
+
+  const handleDeleteAccount = async () => {
+    setDeleteError(null)
+    setDeleting(true)
+
+    try {
+      const { error } = await getSupabase().rpc('delete_own_account')
+      if (error) throw error
+
+      await getSupabase().auth.signOut()
+      window.location.href = '/auth'
+    } catch (err: any) {
+      setDeleteError(err.message ?? 'Failed to delete account')
+      setDeleting(false)
+    }
   }
 
   if (loading) {
@@ -452,6 +471,65 @@ function ProfilePage() {
           {saving ? 'Saving...' : 'Save Profile'}
         </button>
       </form>
+
+      {/* Danger zone */}
+      <div className="mb-8 rounded-xl border border-red-500/30 p-4">
+        <h2 className="font-display font-semibold text-red-400">
+          Danger Zone
+        </h2>
+
+        {!showDeleteConfirm ? (
+          <>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Permanently delete your account and all associated data. This
+              can&apos;t be undone.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="mt-3 rounded-lg border border-red-500/50 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
+            >
+              Delete Account
+            </button>
+          </>
+        ) : (
+          <div className="mt-3 space-y-3">
+            <p className="text-sm text-foreground">
+              Are you sure? This will permanently delete your profile, the
+              games you created, your messages, and remove you from all
+              games you&apos;ve joined. This action cannot be undone.
+            </p>
+
+            {deleteError && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteConfirm(false)
+                  setDeleteError(null)
+                }}
+                disabled={deleting}
+                className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="flex-1 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Yes, delete my account'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -9,6 +9,13 @@ import {
   type PlayerLevel,
 } from '~/lib/sports'
 import type { Game, Profile } from '~/lib/types'
+import type { Sport, SkillLevel } from '~/lib/sports'
+
+function toDateTimeLocal(iso: string) {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 export const Route = createFileRoute('/_authenticated/games/$id')({
   component: GameDetailsPage,
@@ -23,8 +30,21 @@ function GameDetailsPage() {
     {},
   )
   const [userId, setUserId] = useState<string | null>(null)
+  const [isBlocked, setIsBlocked] = useState(false)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+
+  const [isEditing, setIsEditing] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [editSport, setEditSport] = useState<Sport>('football')
+  const [editTitle, setEditTitle] = useState('')
+  const [editLocation, setEditLocation] = useState('')
+  const [editCity, setEditCity] = useState('')
+  const [editDateTime, setEditDateTime] = useState('')
+  const [editMaxPlayers, setEditMaxPlayers] = useState(2)
+  const [editSkillLevel, setEditSkillLevel] = useState<SkillLevel>('intermediate')
+  const [editPrice, setEditPrice] = useState('')
+  const [editDescription, setEditDescription] = useState('')
 
   useEffect(() => {
     loadGame()
@@ -36,6 +56,16 @@ function GameDetailsPage() {
       data: { user },
     } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
+
+    if (user) {
+      const { data: blockData } = await supabase
+        .from('game_blocked_players')
+        .select('id')
+        .eq('game_id', id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      setIsBlocked(!!blockData)
+    }
 
     const { data: gameData } = await supabase
       .from('games')
@@ -119,6 +149,108 @@ function GameDetailsPage() {
     setActionLoading(false)
   }
 
+  const startEdit = () => {
+    if (!game) return
+    setEditSport(game.sport)
+    setEditTitle(game.title)
+    setEditLocation(game.location)
+    setEditCity(game.city ?? '')
+    setEditDateTime(toDateTimeLocal(game.date_time))
+    setEditMaxPlayers(game.max_players)
+    setEditSkillLevel((game.skill_level as SkillLevel) ?? 'intermediate')
+    setEditPrice(game.price ? String(game.price) : '')
+    setEditDescription(game.description ?? '')
+    setEditError(null)
+    setIsEditing(true)
+  }
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!game) return
+    setEditError(null)
+
+    if (editMaxPlayers < game.current_players) {
+      setEditError(
+        `Max players can't be less than the ${game.current_players} players already in the game`,
+      )
+      return
+    }
+
+    setActionLoading(true)
+    const { error } = await getSupabase()
+      .from('games')
+      .update({
+        sport: editSport,
+        title: editTitle,
+        location: editLocation,
+        city: editCity || null,
+        date_time: new Date(editDateTime).toISOString(),
+        max_players: editMaxPlayers,
+        skill_level: editSkillLevel,
+        price: editPrice ? parseFloat(editPrice) : 0,
+        description: editDescription || null,
+      })
+      .eq('id', game.id)
+
+    if (error) {
+      setEditError(error.message)
+    } else {
+      setIsEditing(false)
+      await loadGame()
+    }
+    setActionLoading(false)
+  }
+
+  const handleRemoveParticipant = async (participantId: string) => {
+    if (!game || !confirm('Remove this player from the game?')) return
+    setActionLoading(true)
+    const { error, count } = await getSupabase()
+      .from('game_participants')
+      .delete({ count: 'exact' })
+      .eq('game_id', game.id)
+      .eq('user_id', participantId)
+    if (error) {
+      alert(error.message)
+    } else if (!count) {
+      alert(
+        "Couldn't remove player. You may not have permission to do this yet.",
+      )
+    }
+    await loadGame()
+    setActionLoading(false)
+  }
+
+  const handleBlockParticipant = async (participantId: string) => {
+    if (
+      !game ||
+      !userId ||
+      !confirm(
+        'Remove and block this player? They will not be able to rejoin this game.',
+      )
+    )
+      return
+    setActionLoading(true)
+
+    const { error: blockError } = await getSupabase()
+      .from('game_blocked_players')
+      .insert({ game_id: game.id, user_id: participantId, blocked_by: userId })
+    if (blockError) {
+      alert(blockError.message)
+      setActionLoading(false)
+      return
+    }
+
+    const { error: removeError } = await getSupabase()
+      .from('game_participants')
+      .delete()
+      .eq('game_id', game.id)
+      .eq('user_id', participantId)
+    if (removeError) alert(removeError.message)
+
+    await loadGame()
+    setActionLoading(false)
+  }
+
   if (loading) {
     return (
       <div className="px-4 pt-6 text-center text-muted-foreground">
@@ -147,7 +279,187 @@ function GameDetailsPage() {
 
   return (
     <div className="px-4 pt-6 pb-24">
-      {/* Hero card */}
+      {isEditing ? (
+        <form
+          onSubmit={handleSaveEdit}
+          className="mb-6 space-y-4 rounded-2xl border border-border bg-surface p-4"
+        >
+          <h2 className="font-display text-lg font-semibold text-foreground">
+            Edit Game
+          </h2>
+
+          {/* Sport selector */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Sport
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {SPORTS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setEditSport(s)}
+                  className={`flex flex-col items-center gap-1 rounded-xl border p-2.5 text-xs transition-colors ${
+                    editSport === s
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  <span className="text-lg">{SPORT_EMOJI[s]}</span>
+                  <span className="leading-tight">{SPORT_LABEL[s]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Title
+            </label>
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              required
+              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          {/* Location */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Location
+            </label>
+            <input
+              type="text"
+              value={editLocation}
+              onChange={(e) => setEditLocation(e.target.value)}
+              required
+              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          {/* City */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              City
+            </label>
+            <input
+              type="text"
+              value={editCity}
+              onChange={(e) => setEditCity(e.target.value)}
+              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          {/* Date & Time */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Date & Time
+            </label>
+            <input
+              type="datetime-local"
+              value={editDateTime}
+              onChange={(e) => setEditDateTime(e.target.value)}
+              required
+              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          {/* Max Players */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Max Players
+            </label>
+            <input
+              type="number"
+              min={game.current_players}
+              max={100}
+              value={editMaxPlayers}
+              onChange={(e) => setEditMaxPlayers(parseInt(e.target.value))}
+              required
+              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          {/* Skill Level */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Skill Level
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {SKILL_LEVELS.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => setEditSkillLevel(level)}
+                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                    editSkillLevel === level
+                      ? 'border-secondary bg-secondary/10 text-secondary'
+                      : 'border-border text-muted-foreground hover:border-secondary/50'
+                  }`}
+                >
+                  {SKILL_LABEL[level]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Price */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Price per Player
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={editPrice}
+              onChange={(e) => setEditPrice(e.target.value)}
+              placeholder="0"
+              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Description
+            </label>
+            <textarea
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              rows={3}
+              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          {editError && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              {editError}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={actionLoading}
+              className="gradient-hero shadow-glow flex-1 rounded-xl py-3 font-display font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {actionLoading ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              disabled={actionLoading}
+              className="rounded-xl border border-border px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
       <div className="mb-6 overflow-hidden rounded-2xl border border-border bg-surface">
         <div className="gradient-hero p-6 text-center">
           <span className="text-4xl">
@@ -229,6 +541,7 @@ function GameDetailsPage() {
           )}
         </div>
       </div>
+      )}
 
       {/* Squad meter */}
       <div className="mb-6">
@@ -245,28 +558,30 @@ function GameDetailsPage() {
         </div>
         <div className="grid grid-cols-2 gap-2">
           {participants.map((p) => (
-            <Link
-              key={p.id}
-              to="/users/$id"
-              params={{ id: p.id }}
-              className="flex items-center gap-2 rounded-xl border border-border bg-surface p-2.5 transition-colors hover:border-primary/50"
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-sm text-muted-foreground">
-                {p.avatar_url ? (
-                  <img
-                    src={p.avatar_url}
-                    alt=""
-                    className="h-full w-full rounded-full object-cover"
-                  />
-                ) : (
-                  p.name?.[0]?.toUpperCase() ?? '?'
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {p.name ?? 'Player'}
-                </p>
-                <p className="truncate text-xs">
+            <div key={p.id} className="relative">
+              <Link
+                to="/users/$id"
+                params={{ id: p.id }}
+                className={`flex items-center gap-2 rounded-xl border border-border bg-surface p-2.5 transition-colors hover:border-primary/50 ${
+                  isCreator && p.id !== game.creator_id ? 'pr-14' : ''
+                }`}
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-sm text-muted-foreground">
+                  {p.avatar_url ? (
+                    <img
+                      src={p.avatar_url}
+                      alt=""
+                      className="h-full w-full rounded-full object-cover"
+                    />
+                  ) : (
+                    p.name?.[0]?.toUpperCase() ?? '?'
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {p.name ?? 'Player'}
+                  </p>
+                  <p className="truncate text-xs">
                   {sportLevels[p.id] ? (
                     <span className="text-secondary">
                       {PLAYER_LEVEL_LABEL[sportLevels[p.id]]}
@@ -275,11 +590,44 @@ function GameDetailsPage() {
                     <span className="text-muted-foreground">No level set</span>
                   )}
                   {p.id === game.creator_id && (
-                    <span className="text-primary"> · Host</span>
-                  )}
-                </p>
+                      <span className="text-primary"> · Host</span>
+                    )}
+                  </p>
               </div>
-            </Link>
+              </Link>
+              {isCreator && p.id !== game.creator_id && (
+                <div className="absolute right-1.5 top-1.5 flex gap-0.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleRemoveParticipant(p.id)
+                    }}
+                    disabled={actionLoading}
+                    aria-label="Remove player"
+                    title="Remove player"
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                  >
+                    ×
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleBlockParticipant(p.id)
+                    }}
+                    disabled={actionLoading}
+                    aria-label="Remove and block player"
+                    title="Remove and block player"
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-sm text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                  >
+                    ⛔
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
           {Array.from({ length: spotsLeft }).map((_, i) => (
             <div
@@ -331,17 +679,26 @@ function GameDetailsPage() {
       )}
 
       {/* Action bar */}
-      {game.status === 'open' && (
+      {game.status === 'open' && !isEditing && (
         <div className="fixed bottom-16 left-0 right-0 border-t border-border bg-background/95 p-4 backdrop-blur-sm">
           <div className="mx-auto max-w-md">
             {isCreator ? (
-              <button
-                onClick={handleCancel}
-                disabled={actionLoading}
-                className="w-full rounded-xl border border-red-500/50 py-3 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
-              >
-                {actionLoading ? 'Cancelling...' : 'Cancel Game'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={startEdit}
+                  disabled={actionLoading}
+                  className="flex-1 rounded-xl border border-border py-3 text-sm font-semibold text-foreground transition-colors hover:bg-surface disabled:opacity-50"
+                >
+                  Edit Game
+                </button>
+                <button
+                  onClick={handleCancel}
+                  disabled={actionLoading}
+                  className="flex-1 rounded-xl border border-red-500/50 py-3 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                >
+                  {actionLoading ? 'Cancelling...' : 'Cancel Game'}
+                </button>
+              </div>
             ) : isParticipant ? (
               <button
                 onClick={handleLeave}
@@ -350,6 +707,10 @@ function GameDetailsPage() {
               >
                 {actionLoading ? 'Leaving...' : 'Leave Game'}
               </button>
+            ) : isBlocked ? (
+              <div className="rounded-xl bg-surface py-3 text-center text-sm text-muted-foreground">
+                You've been removed from this game and can't rejoin.
+              </div>
             ) : spotsLeft > 0 ? (
               <button
                 onClick={handleJoin}

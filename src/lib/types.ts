@@ -48,6 +48,14 @@ export interface GameParticipant {
   joined_at: string
 }
 
+export interface GameBlockedPlayer {
+  id: string
+  game_id: string
+  user_id: string
+  blocked_by: string
+  created_at: string
+}
+
 export interface Message {
   id: string
   game_id: string
@@ -80,9 +88,19 @@ export interface Database {
           Partial<Pick<ProfileSport, 'player_level' | 'player_position'>>
         Update: Partial<ProfileSport>
       }
+      game_blocked_players: {
+        Row: GameBlockedPlayer
+        Insert: Omit<GameBlockedPlayer, 'id' | 'created_at'>
+        Update: Partial<GameBlockedPlayer>
+      }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      delete_own_account: {
+        Args: Record<string, never>
+        Returns: void
+      }
+    }
     Enums: Record<string, never>
   }
 }

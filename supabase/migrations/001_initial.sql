@@ -64,6 +64,16 @@ create table public.profile_sports (
   unique(profile_id, sport)
 );
 
+-- Players blocked from rejoining a specific game
+create table public.game_blocked_players (
+  id uuid default gen_random_uuid() primary key,
+  game_id uuid references public.games(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  blocked_by uuid references public.profiles(id) on delete cascade not null,
+  created_at timestamptz default now(),
+  unique(game_id, user_id)
+);
+
 -- Indexes
 create index idx_games_sport on public.games(sport);
 create index idx_games_date_time on public.games(date_time);
@@ -72,6 +82,7 @@ create index idx_games_city on public.games(city);
 create index idx_game_participants_game on public.game_participants(game_id);
 create index idx_game_participants_user on public.game_participants(user_id);
 create index idx_profile_sports_profile on public.profile_sports(profile_id);
+create index idx_game_blocked_players_game on public.game_blocked_players(game_id);
 
 -- ============================================================
 -- Triggers
@@ -164,6 +175,7 @@ alter table public.profiles enable row level security;
 alter table public.games enable row level security;
 alter table public.game_participants enable row level security;
 alter table public.profile_sports enable row level security;
+alter table public.game_blocked_players enable row level security;
 
 -- Profiles: anyone authenticated can read, users can update own
 create policy "Profiles are viewable by authenticated users"
@@ -206,12 +218,30 @@ create policy "Participants are viewable by authenticated users"
 create policy "Users can join games"
   on public.game_participants for insert
   to authenticated
-  with check (auth.uid() = user_id);
+  with check (
+    auth.uid() = user_id
+    and not exists (
+      select 1 from public.game_blocked_players
+      where game_blocked_players.game_id = game_participants.game_id
+      and game_blocked_players.user_id = auth.uid()
+    )
+  );
 
 create policy "Users can leave games"
   on public.game_participants for delete
   to authenticated
   using (auth.uid() = user_id);
+
+create policy "Creators can remove participants"
+  on public.game_participants for delete
+  to authenticated
+  using (
+    exists (
+      select 1 from public.games
+      where games.id = game_participants.game_id
+      and games.creator_id = auth.uid()
+    )
+  );
 
 -- Profile sports: authenticated can read, users manage own
 create policy "Profile sports are viewable by authenticated users"
@@ -233,3 +263,60 @@ create policy "Users can delete own sports"
   on public.profile_sports for delete
   to authenticated
   using (auth.uid() = profile_id);
+
+-- Game blocked players: creators manage their game's block list,
+-- any user can check their own block status
+create policy "Creators can view blocked players"
+  on public.game_blocked_players for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.games
+      where games.id = game_blocked_players.game_id
+      and games.creator_id = auth.uid()
+    )
+  );
+
+create policy "Users can check own block status"
+  on public.game_blocked_players for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "Creators can block players"
+  on public.game_blocked_players for insert
+  to authenticated
+  with check (
+    exists (
+      select 1 from public.games
+      where games.id = game_blocked_players.game_id
+      and games.creator_id = auth.uid()
+    )
+  );
+
+create policy "Creators can unblock players"
+  on public.game_blocked_players for delete
+  to authenticated
+  using (
+    exists (
+      select 1 from public.games
+      where games.id = game_blocked_players.game_id
+      and games.creator_id = auth.uid()
+    )
+  );
+
+  -- Let a user permanently delete their own account.
+--
+-- The anon/authenticated client can't call the auth admin API to delete a
+-- user, so this exposes a security-definer RPC that deletes the caller's
+-- row in auth.users directly. profiles.id -> auth.users has "on delete
+-- cascade", and games, game_participants, profile_sports and messages all
+-- cascade from profiles/games, so this removes all of the user's data.
+create or replace function public.delete_own_account()
+returns void as $$
+begin
+  delete from auth.users where id = auth.uid();
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke all on function public.delete_own_account() from public;
+grant execute on function public.delete_own_account() to authenticated;
