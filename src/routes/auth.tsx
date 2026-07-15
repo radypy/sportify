@@ -23,28 +23,23 @@ function AuthPage() {
 
     try {
       if (mode === 'signup') {
-        const { data, error } = await getSupabase().auth.signUp({
+        const { error } = await getSupabase().auth.signUp({
           email,
           password,
           options: {
             data: { full_name: name },
+            emailRedirectTo: window.location.origin,
           },
         })
         if (error) throw error
 
-        // If the email is already registered, Supabase returns a user with
-        // no identities (to avoid leaking which emails exist).
-        if (data.user && data.user.identities?.length === 0) {
-          throw new Error('An account with this email already exists.')
-        }
-
-        // When email confirmation is enabled, no session is created until the
-        // user clicks the link. Show a "check your email" confirmation instead
-        // of redirecting.
-        if (!data.session) {
-          setConfirmationSent(true)
-          return
-        }
+        // Always confirm to the user that a verification email was sent.
+        // With email confirmation enabled, signUp returns no session until the
+        // user clicks the link, so we never redirect straight to the app here.
+        // If a session WAS returned (confirmation disabled in Supabase), we
+        // still show the screen so there is always clear feedback.
+        setConfirmationSent(true)
+        return
       } else {
         const { error } = await getSupabase().auth.signInWithPassword({
           email,
